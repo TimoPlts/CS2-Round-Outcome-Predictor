@@ -2,7 +2,7 @@
 
 ## What This Project Is
 
-This project predicts the probability of a CS2 round being won by the T side based on structured match data extracted from CS2 demo files.
+This project predicts the probability of a CS2 round being won by the T side based on structured pre-round match data extracted from CS2 demo files.
 
 The system will:
 
@@ -71,18 +71,61 @@ The first full pipeline is:
 
 ### Example Features
 
+- map name
 - round number
-- round length
-- bomb planted
-- kills per side
-- total damage per side
-- grenade usage per side
-- first-kill side
+- pistol round yes/no
+- total money per side at round start
+- equipment value per side at freeze-end
+- rifles / SMGs / snipers per side
+- armor and helmets per side
+- defuse kits for CT
+- utility count per side
+- previous round winner
+- T-side win streak
+- CT-side win streak
 
 ### Target
 
 - `1` = T side won the round
 - `0` = CT side won the round
+
+### First Dataset Schema
+
+The first training dataset uses one row per round with these columns:
+
+- `match_id`
+- `map_name`
+- `round_number`
+- `is_pistol_round`
+- `t_money_total`
+- `ct_money_total`
+- `t_equipment_value`
+- `ct_equipment_value`
+- `t_rifles`
+- `ct_rifles`
+- `t_smgs`
+- `ct_smgs`
+- `t_snipers`
+- `ct_snipers`
+- `t_armor_players`
+- `ct_armor_players`
+- `t_helmet_players`
+- `ct_helmet_players`
+- `ct_defuse_kits`
+- `t_utility_total`
+- `ct_utility_total`
+- `t_smokes`
+- `ct_smokes`
+- `t_flashes`
+- `ct_flashes`
+- `t_he`
+- `ct_he`
+- `t_molotovs`
+- `ct_molotovs`
+- `previous_round_winner`
+- `t_win_streak`
+- `ct_win_streak`
+- `won_round`
 
 ### Output
 
@@ -122,7 +165,7 @@ The project will not try to:
 The first version will focus on:
 
 - post-match demo analysis
-- round-level prediction
+- pre-round round-level prediction
 - a clean and explainable ML pipeline
 - a simple but useful dashboard
 
@@ -131,7 +174,7 @@ The first version will focus on:
 ### Milestone 1: Data Pipeline
 
 - parse one demo with Awpy
-- inspect available round data
+- take one freeze-end snapshot per round
 - export a first CSV with one row per round
 
 ### Milestone 2: Baseline Model
@@ -162,8 +205,8 @@ The best first step is:
 
 1. install the project requirements
 2. parse one demo file
-3. inspect what data exists per round
-4. save a first round-level dataset
+3. inspect freeze-end player state per round
+4. save a first pre-round dataset
 
 Only after that should model training begin.
 
@@ -176,6 +219,7 @@ According to the Awpy documentation:
 - parsing starts with `from awpy import Demo`
 - you run `dem = Demo(path_to_demo)` and then `dem.parse()`
 - Awpy exposes parsed tables such as `rounds`, `kills`, `damages`, `grenades`, `bomb`, and `ticks`
+- the `ticks` table can include player properties such as `balance`, `start_balance`, `current_equip_value`, `armor_value`, `has_helmet`, `has_defuser`, and `inventory`
 - Awpy 2.0.2 requires Python 3.11 or newer
 
 References:
@@ -185,4 +229,4 @@ References:
 
 ## Short Project Pitch
 
-CS2 Round Outcome Predictor is a CS2 analytics application that predicts the probability of a round being won by the T side from demo-derived match data. The project builds a full AI pipeline from raw `.dem` files to structured round features, model training, evaluation, and a dashboard for match analysis. The goal is not to build a game bot, but a useful AI-assisted analysis tool that is technically clear, demoable, and explainable.
+CS2 Round Outcome Predictor is a CS2 analytics application that predicts the probability of a round being won by the T side from demo-derived pre-round match data. The project builds a full AI pipeline from raw `.dem` files to structured round features, model training, evaluation, and a dashboard for match analysis. The goal is not to build a game bot, but a useful AI-assisted analysis tool that is technically clear, demoable, and explainable.

@@ -11,13 +11,20 @@ if str(SRC_DIR) not in sys.path:
 
 import pandas as pd
 
-from cs2_round_predictor.config import DEFAULT_CORE_DATASET_PATH, DEFAULT_MODEL_PATH
-from cs2_round_predictor.models.train import train_baseline_model
+from cs2_round_predictor.config import (
+    DEFAULT_CORE_DATASET_PATH,
+    DEFAULT_MODEL_PATH,
+    PROCESSED_DATA_DIR,
+)
+from cs2_round_predictor.models.predict import predict_round_probabilities
+
+
+DEFAULT_OUTPUT_CSV = PROCESSED_DATA_DIR / "round_predictions.csv"
 
 
 def _build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Train a simple baseline round outcome model."
+        description="Predict T-side round win probabilities for a core feature dataset."
     )
     parser.add_argument(
         "--dataset-csv",
@@ -29,7 +36,13 @@ def _build_parser() -> argparse.ArgumentParser:
         "--model-path",
         type=Path,
         default=DEFAULT_MODEL_PATH,
-        help="Where to save the trained model.",
+        help="Path to the trained model.",
+    )
+    parser.add_argument(
+        "--output-csv",
+        type=Path,
+        default=DEFAULT_OUTPUT_CSV,
+        help="Where to save the per-round predictions CSV.",
     )
     return parser
 
@@ -39,14 +52,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     dataset = pd.read_csv(args.dataset_csv)
-    result = train_baseline_model(dataset, model_path=args.model_path)
+    predictions = predict_round_probabilities(dataset, model_path=args.model_path)
+    args.output_csv.parent.mkdir(parents=True, exist_ok=True)
+    predictions.to_csv(args.output_csv, index=False)
 
-    print(f"Train rows: {result.train_rows}")
-    print(f"Test rows: {result.test_rows}")
-    print(f"Accuracy: {result.accuracy:.3f}")
-    print(f"ROC-AUC: {result.roc_auc:.3f}")
-    print(f"Log loss: {result.log_loss_value:.3f}")
-    print(f"Saved model to {result.model_path}")
+    print(f"Predicted rounds: {len(predictions)}")
+    print(f"Saved predictions to {args.output_csv}")
     return 0
 
 
