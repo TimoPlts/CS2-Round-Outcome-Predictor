@@ -10,10 +10,12 @@ if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
 from cs2_round_predictor.config import (
-    DEFAULT_CORE_DATASET_PATH,
-    DEFAULT_DATASET_PATH,
-    RAW_DATA_DIR,
+    demo_core_features_path,
+    demo_raw_artifacts_dir,
+    demo_round_features_path,
+    demo_source_path,
 )
+from cs2_round_predictor.datasets import sync_default_datasets
 from cs2_round_predictor.features.core_features import build_core_feature_table
 from cs2_round_predictor.parsing.demo_parser import (
     build_round_dataset_from_artifacts,
@@ -58,12 +60,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     demo_path = args.demo_path
+    if not demo_path.exists() and not demo_path.is_absolute():
+        candidate = demo_source_path(demo_path.name)
+        if candidate.exists():
+            demo_path = candidate
+
     if not demo_path.exists():
         parser.error(f"Demo file does not exist: {demo_path}")
 
-    raw_dir = args.raw_output_dir or (RAW_DATA_DIR / demo_path.stem)
-    processed_csv = args.processed_output_csv or DEFAULT_DATASET_PATH
-    core_csv = args.core_output_csv or DEFAULT_CORE_DATASET_PATH
+    raw_dir = args.raw_output_dir or demo_raw_artifacts_dir(demo_path.stem)
+    processed_csv = args.processed_output_csv or demo_round_features_path(demo_path.stem)
+    core_csv = args.core_output_csv or demo_core_features_path(demo_path.stem)
 
     artifacts = parse_demo_file(demo_path, verbose=args.verbose)
     export_artifacts_to_csv(artifacts, raw_dir)
@@ -77,10 +84,16 @@ def main(argv: list[str] | None = None) -> int:
     core_csv.parent.mkdir(parents=True, exist_ok=True)
     round_dataset.to_csv(processed_csv, index=False)
     core_dataset.to_csv(core_csv, index=False)
+    aggregate_round_csv, aggregate_core_csv = sync_default_datasets()
 
+    print(f"Source demo: {demo_path}")
     print(f"Saved raw Awpy tables to {raw_dir}")
     print(f"Saved round-level dataset to {processed_csv}")
     print(f"Saved core round dataset to {core_csv}")
+    if aggregate_round_csv is not None:
+        print(f"Updated default round dataset to {aggregate_round_csv}")
+    if aggregate_core_csv is not None:
+        print(f"Updated default core dataset to {aggregate_core_csv}")
     return 0
 
 

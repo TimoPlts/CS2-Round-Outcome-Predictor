@@ -12,6 +12,7 @@ if str(SRC_DIR) not in sys.path:
 import pandas as pd
 
 from cs2_round_predictor.config import DEFAULT_CORE_DATASET_PATH, DEFAULT_MODEL_PATH
+from cs2_round_predictor.datasets import ensure_default_core_dataset
 from cs2_round_predictor.models.train import train_baseline_model
 
 
@@ -38,9 +39,14 @@ def main(argv: list[str] | None = None) -> int:
     parser = _build_parser()
     args = parser.parse_args(argv)
 
-    dataset = pd.read_csv(args.dataset_csv)
+    dataset_csv = args.dataset_csv
+    if dataset_csv == DEFAULT_CORE_DATASET_PATH:
+        dataset_csv = ensure_default_core_dataset()
+
+    dataset = pd.read_csv(dataset_csv)
     result = train_baseline_model(dataset, model_path=args.model_path)
 
+    print(f"Loaded core dataset from {dataset_csv}")
     print(f"Train rows: {result.train_rows}")
     print(f"Test rows: {result.test_rows}")
     print(f"Accuracy: {result.accuracy:.3f}")
