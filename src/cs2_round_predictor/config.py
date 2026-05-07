@@ -11,6 +11,7 @@ PROCESSED_DEMOS_DIR = PROCESSED_DATA_DIR / "by_demo"
 DEFAULT_DATASET_PATH = PROCESSED_DATA_DIR / "round_features.csv"
 DEFAULT_CORE_DATASET_PATH = PROCESSED_DATA_DIR / "core_round_features.csv"
 DEFAULT_MODEL_PATH = PROJECT_ROOT / "models" / "baseline_model.joblib"
+DEFAULT_NEURAL_MODEL_PATH = PROJECT_ROOT / "models" / "round_outcome_mlp.pt"
 ROUND_FEATURES_FILENAME = "round_features.csv"
 CORE_FEATURES_FILENAME = "core_round_features.csv"
 

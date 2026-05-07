@@ -9,43 +9,6 @@ import re
 
 import pandas as pd
 
-
-EXPECTED_COLUMNS = {
-    "match_id",
-    "map_name",
-    "round_number",
-    "is_pistol_round",
-    "t_money_total",
-    "ct_money_total",
-    "t_equipment_value",
-    "ct_equipment_value",
-    "t_rifles",
-    "ct_rifles",
-    "t_smgs",
-    "ct_smgs",
-    "t_snipers",
-    "ct_snipers",
-    "t_armor_players",
-    "ct_armor_players",
-    "t_helmet_players",
-    "ct_helmet_players",
-    "ct_defuse_kits",
-    "t_utility_total",
-    "ct_utility_total",
-    "t_smokes",
-    "ct_smokes",
-    "t_flashes",
-    "ct_flashes",
-    "t_he",
-    "ct_he",
-    "t_molotovs",
-    "ct_molotovs",
-    "previous_round_winner",
-    "t_win_streak",
-    "ct_win_streak",
-    "won_round",
-}
-
 SNAPSHOT_DEFAULTS = {
     "t_money_total": 0,
     "ct_money_total": 0,
@@ -121,11 +84,6 @@ IGNORED_INVENTORY_ITEMS = {
 
 
 @dataclass(slots=True)
-class ParsedRounds:
-    rounds: pd.DataFrame
-
-
-@dataclass(slots=True)
 class ParsedDemoArtifacts:
     header: dict[str, Any]
     rounds: pd.DataFrame
@@ -134,17 +92,6 @@ class ParsedDemoArtifacts:
     grenades: pd.DataFrame
     bomb: pd.DataFrame
     ticks: pd.DataFrame
-
-
-def load_rounds_csv(csv_path: str | Path) -> ParsedRounds:
-    path = Path(csv_path)
-    rounds = pd.read_csv(path)
-    missing = sorted(EXPECTED_COLUMNS.difference(rounds.columns))
-    if missing:
-        raise ValueError(
-            f"Missing required columns in {path.name}: {', '.join(missing)}"
-        )
-    return ParsedRounds(rounds=rounds)
 
 
 def parse_demo_file(

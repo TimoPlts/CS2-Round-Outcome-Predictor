@@ -55,24 +55,32 @@ def _build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = _build_parser()
-    args = parser.parse_args(argv)
-
-    demo_path = args.demo_path
+def resolve_demo_path(demo_path: Path) -> Path:
     if not demo_path.exists() and not demo_path.is_absolute():
         candidate = demo_source_path(demo_path.name)
         if candidate.exists():
-            demo_path = candidate
+            return candidate
+    return demo_path
 
+
+def parse_and_export_demo(
+    demo_path: Path,
+    *,
+    raw_output_dir: Path | None = None,
+    processed_output_csv: Path | None = None,
+    core_output_csv: Path | None = None,
+    verbose: bool = False,
+    sync_defaults: bool = True,
+) -> dict[str, Path | None]:
+    demo_path = resolve_demo_path(demo_path)
     if not demo_path.exists():
-        parser.error(f"Demo file does not exist: {demo_path}")
+        raise FileNotFoundError(f"Demo file does not exist: {demo_path}")
 
-    raw_dir = args.raw_output_dir or demo_raw_artifacts_dir(demo_path.stem)
-    processed_csv = args.processed_output_csv or demo_round_features_path(demo_path.stem)
-    core_csv = args.core_output_csv or demo_core_features_path(demo_path.stem)
+    raw_dir = raw_output_dir or demo_raw_artifacts_dir(demo_path.stem)
+    processed_csv = processed_output_csv or demo_round_features_path(demo_path.stem)
+    core_csv = core_output_csv or demo_core_features_path(demo_path.stem)
 
-    artifacts = parse_demo_file(demo_path, verbose=args.verbose)
+    artifacts = parse_demo_file(demo_path, verbose=verbose)
     export_artifacts_to_csv(artifacts, raw_dir)
 
     round_dataset = build_round_dataset_from_artifacts(
@@ -84,16 +92,48 @@ def main(argv: list[str] | None = None) -> int:
     core_csv.parent.mkdir(parents=True, exist_ok=True)
     round_dataset.to_csv(processed_csv, index=False)
     core_dataset.to_csv(core_csv, index=False)
-    aggregate_round_csv, aggregate_core_csv = sync_default_datasets()
 
-    print(f"Source demo: {demo_path}")
-    print(f"Saved raw Awpy tables to {raw_dir}")
-    print(f"Saved round-level dataset to {processed_csv}")
-    print(f"Saved core round dataset to {core_csv}")
-    if aggregate_round_csv is not None:
-        print(f"Updated default round dataset to {aggregate_round_csv}")
-    if aggregate_core_csv is not None:
-        print(f"Updated default core dataset to {aggregate_core_csv}")
+    aggregate_round_csv: Path | None = None
+    aggregate_core_csv: Path | None = None
+    if sync_defaults:
+        aggregate_round_csv, aggregate_core_csv = sync_default_datasets()
+
+    return {
+        "demo_path": demo_path,
+        "raw_dir": raw_dir,
+        "processed_csv": processed_csv,
+        "core_csv": core_csv,
+        "aggregate_round_csv": aggregate_round_csv,
+        "aggregate_core_csv": aggregate_core_csv,
+    }
+
+
+def main(argv: list[str] | None = None) -> int:
+    parser = _build_parser()
+    args = parser.parse_args(argv)
+
+    demo_path = resolve_demo_path(args.demo_path)
+
+    if not demo_path.exists():
+        parser.error(f"Demo file does not exist: {demo_path}")
+
+    result = parse_and_export_demo(
+        demo_path,
+        raw_output_dir=args.raw_output_dir,
+        processed_output_csv=args.processed_output_csv,
+        core_output_csv=args.core_output_csv,
+        verbose=args.verbose,
+        sync_defaults=True,
+    )
+
+    print(f"Source demo: {result['demo_path']}")
+    print(f"Saved raw Awpy tables to {result['raw_dir']}")
+    print(f"Saved round-level dataset to {result['processed_csv']}")
+    print(f"Saved core round dataset to {result['core_csv']}")
+    if result["aggregate_round_csv"] is not None:
+        print(f"Updated default round dataset to {result['aggregate_round_csv']}")
+    if result["aggregate_core_csv"] is not None:
+        print(f"Updated default core dataset to {result['aggregate_core_csv']}")
     return 0
 
 

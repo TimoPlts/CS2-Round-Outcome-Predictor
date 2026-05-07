@@ -49,6 +49,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Loaded core dataset from {dataset_csv}")
     print(f"Train rows: {result.train_rows}")
     print(f"Test rows: {result.test_rows}")
+    print(f"Train matches: {result.train_matches}")
+    print(f"Test matches: {result.test_matches}")
     print(f"Accuracy: {result.accuracy:.3f}")
     print(f"ROC-AUC: {result.roc_auc:.3f}")
     print(f"Log loss: {result.log_loss_value:.3f}")
