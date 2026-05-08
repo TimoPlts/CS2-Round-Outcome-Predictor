@@ -17,6 +17,7 @@ At the moment, the repository contains 28 demo files and an aggregated dataset o
 - `scripts/train_neural.py`: train the PyTorch neural network
 - `scripts/predict_neural.py`: create predictions with the neural model
 - `scripts/download_faceit_demos.py`: search FACEIT match history and build a demo manifest for specific players and maps
+- `streamlit_app.py`: round-by-round web UI with team inputs, real result, and neural prediction
 - `data/processed/`: aggregated datasets and prediction outputs
 - `models/`: saved neural model files
 
@@ -65,6 +66,12 @@ Generate predictions:
 
 ```bash
 python scripts/predict_neural.py
+```
+
+Start the web UI:
+
+```bash
+streamlit run streamlit_app.py
 ```
 
 FACEIT demo search for one player and one map:
