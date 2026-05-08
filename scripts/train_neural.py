@@ -41,13 +41,7 @@ def _build_parser() -> argparse.ArgumentParser:
         "--epochs",
         type=int,
         default=200,
-        help="Maximum number of training epochs.",
-    )
-    parser.add_argument(
-        "--patience",
-        type=int,
-        default=20,
-        help="Early stopping patience measured in epochs.",
+        help="Number of training epochs to run.",
     )
     parser.add_argument(
         "--batch-size",
@@ -102,6 +96,26 @@ def main(argv: list[str] | None = None) -> int:
         parser.error(f"Cannot resume because checkpoint does not exist: {args.model_path}")
 
     dataset = pd.read_csv(dataset_csv)
+
+    def _print_epoch_report(metrics: dict[str, float | int]) -> None:
+        train_auc = metrics["train_roc_auc"]
+        validation_auc = metrics["validation_roc_auc"]
+        train_auc_text = f"{train_auc:.3f}" if train_auc == train_auc else "nan"
+        validation_auc_text = (
+            f"{validation_auc:.3f}" if validation_auc == validation_auc else "nan"
+        )
+        print(
+            "Epoch "
+            f"{metrics['epoch']:>3}: "
+            f"train_loss={metrics['train_loss']:.4f} "
+            f"train_acc={metrics['train_accuracy']:.3f} "
+            f"train_auc={train_auc_text} | "
+            f"val_loss={metrics['validation_loss']:.4f} "
+            f"val_acc={metrics['validation_accuracy']:.3f} "
+            f"val_auc={validation_auc_text} | "
+            f"best_epoch={metrics['best_epoch_so_far']}"
+        )
+
     result = train_neural_model(
         dataset,
         model_path=args.model_path,
@@ -112,8 +126,8 @@ def main(argv: list[str] | None = None) -> int:
         weight_decay=args.weight_decay,
         batch_size=args.batch_size,
         epochs=args.epochs,
-        patience=args.patience,
         device=args.device,
+        epoch_reporter=_print_epoch_report,
     )
 
     print(f"Loaded core dataset from {dataset_csv}")
