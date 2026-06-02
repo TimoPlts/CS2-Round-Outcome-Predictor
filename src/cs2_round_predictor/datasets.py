@@ -10,7 +10,12 @@ from cs2_round_predictor.config import (
     demo_core_feature_paths,
     demo_round_feature_paths,
 )
-from cs2_round_predictor.features.core_features import build_core_feature_table
+from cs2_round_predictor.features.core_features import (
+    CORE_FEATURE_COLUMNS,
+    MATCH_ID_COLUMN,
+    TARGET_COLUMN,
+    build_core_feature_table,
+)
 
 
 def ensure_default_round_dataset() -> Path:
@@ -27,7 +32,10 @@ def ensure_default_round_dataset() -> Path:
 
 def ensure_default_core_dataset() -> Path:
     if DEFAULT_CORE_DATASET_PATH.exists():
-        return DEFAULT_CORE_DATASET_PATH
+        existing = pd.read_csv(DEFAULT_CORE_DATASET_PATH, nrows=1)
+        required_columns = {MATCH_ID_COLUMN, TARGET_COLUMN, *CORE_FEATURE_COLUMNS}
+        if required_columns.issubset(existing.columns):
+            return DEFAULT_CORE_DATASET_PATH
 
     dataset_path = refresh_default_core_dataset()
     if dataset_path is None:
@@ -48,12 +56,10 @@ def refresh_default_round_dataset() -> Path | None:
 
 
 def refresh_default_core_dataset() -> Path | None:
-    core_dataset = _combine_csv_files(demo_core_feature_paths())
-    if core_dataset is None:
-        round_dataset_path = refresh_default_round_dataset()
-        if round_dataset_path is None:
-            return None
-        core_dataset = build_core_feature_table(pd.read_csv(round_dataset_path))
+    round_dataset_path = refresh_default_round_dataset()
+    if round_dataset_path is None:
+        return None
+    core_dataset = build_core_feature_table(pd.read_csv(round_dataset_path))
 
     DEFAULT_CORE_DATASET_PATH.parent.mkdir(parents=True, exist_ok=True)
     core_dataset.to_csv(DEFAULT_CORE_DATASET_PATH, index=False)

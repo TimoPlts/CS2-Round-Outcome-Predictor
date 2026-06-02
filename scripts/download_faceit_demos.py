@@ -154,6 +154,7 @@ class FaceitApiClient:
         headers = {
             "Authorization": f"Bearer {bearer_token}",
             "Accept": "application/json",
+            "User-Agent": "CS2-Round-Outcome-Predictor/1.0",
         }
         data: bytes | None = None
         if json_body is not None:
@@ -166,6 +167,12 @@ class FaceitApiClient:
                 return json.loads(response.read().decode("utf-8"))
         except error.HTTPError as exc:
             body = exc.read().decode("utf-8", errors="replace")
+            if "Just a moment" in body or "challenges.cloudflare.com" in body:
+                raise RuntimeError(
+                    f"FACEIT request failed with {exc.code} for {url}: "
+                    "Cloudflare challenge returned HTML instead of API JSON. "
+                    "Retry from a network/IP that FACEIT allows for API access, or check the API app settings."
+                ) from exc
             raise RuntimeError(
                 f"FACEIT request failed with {exc.code} for {url}: {body}"
             ) from exc
@@ -348,11 +355,36 @@ def _sanitize_segment(value: str) -> str:
 
 def _build_output_paths(output_dir: Path, match_id: str, resource_url: str) -> tuple[Path, Path | None]:
     resource_name = Path(parse.urlparse(resource_url).path).name or f"{match_id}.dem.gz"
-    gz_path = output_dir / f"{_sanitize_segment(match_id)}_{_sanitize_segment(resource_name)}"
+    compressed_path = output_dir / f"{_sanitize_segment(match_id)}_{_sanitize_segment(resource_name)}"
     dem_path = None
-    if gz_path.suffix == ".gz":
-        dem_path = gz_path.with_suffix("")
-    return gz_path, dem_path
+    if compressed_path.suffix in {".gz", ".zst"}:
+        dem_path = compressed_path.with_suffix("")
+    return compressed_path, dem_path
+
+
+def _decompress_demo_file(source_path: Path, destination_path: Path) -> None:
+    if source_path.suffix == ".gz":
+        with gzip.open(source_path, "rb") as source:
+            with destination_path.open("wb") as destination:
+                shutil.copyfileobj(source, destination)
+        return
+
+    if source_path.suffix == ".zst":
+        try:
+            import zstandard as zstd
+        except ImportError as exc:
+            raise RuntimeError(
+                "Cannot decompress .zst FACEIT demo files because `zstandard` is not installed. "
+                "Run `pip install -r requirements.txt` first."
+            ) from exc
+
+        decompressor = zstd.ZstdDecompressor()
+        with source_path.open("rb") as source:
+            with destination_path.open("wb") as destination:
+                decompressor.copy_stream(source, destination)
+        return
+
+    raise ValueError(f"Unsupported compressed demo format: {source_path}")
 
 
 def _write_manifest(manifest_path: Path, demos: list[DemoCandidate]) -> None:
@@ -436,28 +468,26 @@ def _download_demos(
 
     for demo in demos:
         for resource_url in demo.demo_resource_urls:
-            gz_path, dem_path = _build_output_paths(output_dir, demo.match_id, resource_url)
+            download_path, dem_path = _build_output_paths(output_dir, demo.match_id, resource_url)
 
             if dem_path is not None and dem_path.exists() and not force:
                 skipped_files += 1
                 print(f"Skipping existing demo: {dem_path.name}")
                 continue
-            if gz_path.exists() and dem_path is None and not force:
+            if download_path.exists() and dem_path is None and not force:
                 skipped_files += 1
-                print(f"Skipping existing demo: {gz_path.name}")
+                print(f"Skipping existing demo: {download_path.name}")
                 continue
 
             signed_url = client.get_signed_demo_download_url(resource_url)
-            client.download_file(signed_url, gz_path)
+            client.download_file(signed_url, download_path)
 
             if dem_path is not None:
-                with gzip.open(gz_path, "rb") as source:
-                    with dem_path.open("wb") as destination:
-                        shutil.copyfileobj(source, destination)
-                gz_path.unlink()
+                _decompress_demo_file(download_path, dem_path)
+                download_path.unlink()
                 print(f"Downloaded {demo.match_id} -> {dem_path.name}")
             else:
-                print(f"Downloaded {demo.match_id} -> {gz_path.name}")
+                print(f"Downloaded {demo.match_id} -> {download_path.name}")
             downloaded_files += 1
 
     return downloaded_files, skipped_files
@@ -471,7 +501,7 @@ def main(argv: list[str] | None = None) -> int:
     if not data_api_key:
         parser.error("FACEIT_DATA_API_KEY environment variable is required.")
 
-    downloads_token = os.environ.get("FACEIT_DOWNLOADS_API_TOKEN")
+    downloads_token = os.environ.get("FACEIT_DOWNLOADS_API_TOKEN") or data_api_key
     client = FaceitApiClient(
         data_api_key=data_api_key,
         downloads_token=downloads_token,
