@@ -10,6 +10,7 @@ import os
 import re
 import shutil
 import sys
+import time
 from typing import Any
 from urllib import error, parse, request
 
@@ -26,6 +27,8 @@ DOWNLOADS_API_BASE_URL = "https://open.faceit.com"
 DEFAULT_MANIFEST_PATH = PROJECT_ROOT / "data" / "raw" / "faceit_demo_manifest.json"
 DEFAULT_GAME_ID = "cs2"
 DEFAULT_PAGE_SIZE = 100
+DEFAULT_TIMEOUT_SECONDS = 120
+DEFAULT_DOWNLOAD_RETRIES = 3
 KNOWN_MAPS = {
     "ancient",
     "anubis",
@@ -58,11 +61,13 @@ class FaceitApiClient:
         *,
         data_api_key: str,
         downloads_token: str | None = None,
-        timeout_seconds: int = 30,
+        timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
+        download_retries: int = DEFAULT_DOWNLOAD_RETRIES,
     ) -> None:
         self._data_api_key = data_api_key
         self._downloads_token = downloads_token
         self._timeout_seconds = timeout_seconds
+        self._download_retries = download_retries
 
     def get_player(self, nickname: str, *, game: str) -> dict[str, Any]:
         query = parse.urlencode({"nickname": nickname, "game": game})
@@ -138,10 +143,28 @@ class FaceitApiClient:
 
     def download_file(self, url: str, destination: Path) -> None:
         destination.parent.mkdir(parents=True, exist_ok=True)
-        req = request.Request(url, method="GET")
-        with request.urlopen(req, timeout=self._timeout_seconds) as response:
-            with destination.open("wb") as handle:
-                shutil.copyfileobj(response, handle)
+        last_error: BaseException | None = None
+        for attempt in range(1, self._download_retries + 1):
+            req = request.Request(url, method="GET")
+            try:
+                with request.urlopen(req, timeout=self._timeout_seconds) as response:
+                    with destination.open("wb") as handle:
+                        shutil.copyfileobj(response, handle)
+                return
+            except (TimeoutError, error.URLError, OSError) as exc:
+                last_error = exc
+                if attempt >= self._download_retries:
+                    break
+                print(
+                    f"Download attempt {attempt}/{self._download_retries} failed for "
+                    f"{destination.name}: {exc}. Retrying..."
+                )
+                time.sleep(min(5 * attempt, 15))
+
+        raise RuntimeError(
+            f"Download failed after {self._download_retries} attempts for {destination.name}: "
+            f"{last_error}"
+        ) from last_error
 
     def _request_json(
         self,
@@ -242,6 +265,18 @@ def _build_parser() -> argparse.ArgumentParser:
         "--list-only",
         action="store_true",
         help="Only build the manifest, do not download demo files.",
+    )
+    parser.add_argument(
+        "--timeout-seconds",
+        type=int,
+        default=DEFAULT_TIMEOUT_SECONDS,
+        help="Timeout in seconds for FACEIT API calls and demo downloads.",
+    )
+    parser.add_argument(
+        "--download-retries",
+        type=int,
+        default=DEFAULT_DOWNLOAD_RETRIES,
+        help="Number of times to retry each demo file download after a timeout/network error.",
     )
     return parser
 
@@ -505,6 +540,8 @@ def main(argv: list[str] | None = None) -> int:
     client = FaceitApiClient(
         data_api_key=data_api_key,
         downloads_token=downloads_token,
+        timeout_seconds=args.timeout_seconds,
+        download_retries=args.download_retries,
     )
 
     demos = _select_demo_candidates(
