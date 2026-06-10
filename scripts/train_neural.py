@@ -69,20 +69,20 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--weight-decay",
         type=float,
-        default=1e-4,
+        default=1e-3,
         help="Adam weight decay.",
     )
     parser.add_argument(
         "--dropout",
         type=float,
-        default=0.2,
+        default=0.4,
         help="Dropout rate for hidden layers.",
     )
     parser.add_argument(
         "--hidden-sizes",
         type=int,
         nargs="+",
-        default=[64, 32],
+        default=[16],
         help="Hidden layer sizes for the MLP.",
     )
     parser.add_argument(
@@ -169,6 +169,9 @@ def _write_experiment_record(
         "requested_epochs": int(args.epochs),
         "best_epoch": int(result.best_epoch),
         "epochs_completed": int(result.epochs_completed),
+        "decision_threshold": float(result.decision_threshold),
+        "duplicate_matches_removed": int(result.duplicate_matches_removed),
+        "duplicate_rows_removed": int(result.duplicate_rows_removed),
         "train_rows": int(result.train_rows),
         "validation_rows": int(result.validation_rows),
         "test_rows": int(result.test_rows),
@@ -250,6 +253,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Test matches: {result.test_matches}")
     print(f"Best epoch: {result.best_epoch}")
     print(f"Epochs completed: {result.epochs_completed}")
+    print(f"Decision threshold: {result.decision_threshold:.2f}")
+    print(f"Duplicate matches removed: {result.duplicate_matches_removed}")
+    print(f"Duplicate rows removed: {result.duplicate_rows_removed}")
     print(f"Accuracy: {result.accuracy:.3f}")
     print(f"ROC-AUC: {result.roc_auc:.3f}")
     print(f"Log loss: {result.log_loss_value:.3f}")

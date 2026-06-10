@@ -10,3 +10,4 @@ data/processed/*
 !data/processed/.gitkeep
 models/
 streamlit_app_state/
+documentation/
