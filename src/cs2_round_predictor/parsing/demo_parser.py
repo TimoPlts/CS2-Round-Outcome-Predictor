@@ -37,15 +37,6 @@ SNAPSHOT_DEFAULTS = {
     "ct_molotovs": 0,
 }
 
-HISTORICAL_FORM_DEFAULTS = {
-    "history_rounds_available": 0,
-    "recent_win_rate_diff": 0.0,
-    "recent_kills_diff": 0.0,
-    "recent_damage_diff": 0.0,
-    "recent_opening_duel_rate_diff": 0.0,
-    "opening_duel_win_rate_diff": 0.0,
-}
-
 RIFLE_ITEMS = {
     "ak47",
     "aug",
@@ -148,7 +139,6 @@ def build_round_dataset_from_artifacts(
     rounds = _normalize_rounds(artifacts.rounds, artifacts.header, match_id)
     snapshot = _build_preround_snapshot(rounds, artifacts.ticks)
     dataset = rounds.merge(snapshot, on="round_number", how="left").fillna(SNAPSHOT_DEFAULTS)
-    dataset = add_historical_form_features(dataset, artifacts.kills, artifacts.damages)
 
     ordered_columns = [
         "match_id",
@@ -183,7 +173,6 @@ def build_round_dataset_from_artifacts(
         "previous_round_winner",
         "t_win_streak",
         "ct_win_streak",
-        *HISTORICAL_FORM_DEFAULTS.keys(),
         "won_round",
     ]
 
@@ -191,121 +180,13 @@ def build_round_dataset_from_artifacts(
         if column not in dataset.columns:
             dataset[column] = 0
 
-    float_columns = set(HISTORICAL_FORM_DEFAULTS).difference({"history_rounds_available"})
     int_columns = [
         column
         for column in ordered_columns
-        if column not in {"match_id", "map_name", *float_columns}
+        if column not in {"match_id", "map_name"}
     ]
     dataset[int_columns] = dataset[int_columns].astype(int)
-    dataset[list(float_columns)] = dataset[list(float_columns)].astype(float)
     return dataset.loc[:, ordered_columns]
-
-
-def add_historical_form_features(
-    round_dataset: pd.DataFrame,
-    kills: pd.DataFrame,
-    damages: pd.DataFrame,
-) -> pd.DataFrame:
-    output = round_dataset.drop(
-        columns=list(HISTORICAL_FORM_DEFAULTS),
-        errors="ignore",
-    ).copy()
-    round_numbers = output["round_number"].astype(int)
-
-    previous_wins = output["won_round"].astype(float).shift(1)
-    output["history_rounds_available"] = range(len(output))
-    output["recent_win_rate_diff"] = (
-        previous_wins.rolling(window=5, min_periods=1).mean().fillna(0.5) * 2 - 1
-    )
-
-    kill_summary = _build_side_event_summary(
-        kills,
-        value_column=None,
-        round_numbers=round_numbers,
-    )
-    damage_summary = _build_side_event_summary(
-        damages,
-        value_column="dmg_health_real",
-        round_numbers=round_numbers,
-    )
-    kill_diff = kill_summary["t"] - kill_summary["ct"]
-    damage_diff = damage_summary["t"] - damage_summary["ct"]
-    output["recent_kills_diff"] = (
-        kill_diff.shift(1).rolling(window=3, min_periods=1).mean().fillna(0.0)
-    )
-    output["recent_damage_diff"] = (
-        damage_diff.shift(1).rolling(window=3, min_periods=1).mean().fillna(0.0)
-    )
-
-    opening_winners = _opening_duel_winners(kills, round_numbers)
-    opening_scores = opening_winners.map({"t": 1.0, "ct": -1.0}).fillna(0.0)
-    output["recent_opening_duel_rate_diff"] = (
-        opening_scores.shift(1).rolling(window=5, min_periods=1).mean().fillna(0.0)
-    )
-    previous_t_openings = opening_winners.eq("t").astype(int).shift(1).fillna(0).cumsum()
-    previous_ct_openings = opening_winners.eq("ct").astype(int).shift(1).fillna(0).cumsum()
-    previous_valid_openings = previous_t_openings + previous_ct_openings
-    output["opening_duel_win_rate_diff"] = (
-        (previous_t_openings - previous_ct_openings)
-        .div(previous_valid_openings.where(previous_valid_openings > 0))
-        .fillna(0.0)
-    )
-    return output
-
-
-def _build_side_event_summary(
-    events: pd.DataFrame,
-    *,
-    value_column: str | None,
-    round_numbers: pd.Series,
-) -> pd.DataFrame:
-    summary = pd.DataFrame(0.0, index=round_numbers.tolist(), columns=["t", "ct"])
-    required = {"round_num", "attacker_side", "victim_side"}
-    if events.empty or not required.issubset(events.columns):
-        return summary
-
-    valid = events[
-        events["attacker_side"].isin(["t", "ct"])
-        & events["victim_side"].isin(["t", "ct"])
-        & (events["attacker_side"] != events["victim_side"])
-    ].copy()
-    if valid.empty:
-        return summary
-
-    if value_column is None:
-        valid["event_value"] = 1.0
-    elif value_column in valid.columns:
-        valid["event_value"] = pd.to_numeric(valid[value_column], errors="coerce").fillna(0.0)
-    else:
-        return summary
-
-    grouped = valid.groupby(["round_num", "attacker_side"])["event_value"].sum().unstack(fill_value=0)
-    for side in ["t", "ct"]:
-        if side in grouped.columns:
-            summary.loc[summary.index.intersection(grouped.index), side] = grouped.loc[
-                summary.index.intersection(grouped.index), side
-            ]
-    return summary.reset_index(drop=True)
-
-
-def _opening_duel_winners(kills: pd.DataFrame, round_numbers: pd.Series) -> pd.Series:
-    winners = pd.Series("", index=range(len(round_numbers)), dtype="object")
-    required = {"round_num", "tick", "attacker_side", "victim_side"}
-    if kills.empty or not required.issubset(kills.columns):
-        return winners
-
-    valid = kills[
-        kills["attacker_side"].isin(["t", "ct"])
-        & kills["victim_side"].isin(["t", "ct"])
-        & (kills["attacker_side"] != kills["victim_side"])
-    ].copy()
-    if valid.empty:
-        return winners
-
-    first_kills = valid.sort_values("tick").drop_duplicates("round_num")
-    winner_by_round = first_kills.set_index("round_num")["attacker_side"]
-    return round_numbers.map(winner_by_round).fillna("").reset_index(drop=True)
 
 
 def export_artifacts_to_csv(artifacts: ParsedDemoArtifacts, output_dir: str | Path) -> None:

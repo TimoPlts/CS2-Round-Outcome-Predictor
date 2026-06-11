@@ -8,6 +8,6 @@ data/raw/*
 !data/raw/.gitkeep
 data/processed/*
 !data/processed/.gitkeep
-models/
+/models/
 streamlit_app_state/
 documentation/

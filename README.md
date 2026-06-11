@@ -354,10 +354,6 @@ The current model uses 21 features:
 - HE-grenade difference
 - molotov/incendiary difference
 
-The full dataset also stores historical form features calculated only from
-earlier rounds. They are available for experiments but are not used by the
-current default model because they did not improve held-out performance.
-
 ## Model
 
 The current model is a small multilayer perceptron:

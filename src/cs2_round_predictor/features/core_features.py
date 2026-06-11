@@ -25,7 +25,8 @@ CORE_FEATURE_COLUMNS = [
     "previous_round_winner",
     "win_streak_diff",
     "ct_defuse_kits",
-    "t_buy_type",
+    "t_buy_type", # 0 eco, 1 medium, 2 full  /  equipment value < 10.000-> 0  /  10.000 <= equipment value < 20.000 -> 1
+                  # equipment value >= 20.000 -> 2
     "ct_buy_type",
     "buy_type_diff",
     *PAIR_DIFFS.keys(),
